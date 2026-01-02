@@ -10,6 +10,7 @@ A premium holographic card effect with smooth 3D tilt animations, built with pur
 - **Edge Glow** - Dynamic colored glow that intensifies on hover
 - **Image Upload** - Upload your own image or drag & drop
 - **Touch Support** - Works on mobile devices
+- **Gyroscope Tilt** - Physically tilt your phone to move the card (mobile)
 - **Accessibility** - Respects `prefers-reduced-motion`
 
 ## Usage
@@ -17,6 +18,12 @@ A premium holographic card effect with smooth 3D tilt animations, built with pur
 1. Open `index.html` in any modern browser
 2. Hover over the card to see the 3D effect
 3. Upload your own image using the button or drag & drop
+
+### Mobile Gyroscope
+
+On mobile devices, tap "Enable Tilt" to activate gyroscope mode. The card will respond to physical device tilting for a natural 3D effect.
+
+**Note:** iOS 13+ requires permission for motion sensors. You'll be prompted to allow access when enabling tilt.
 
 ## How It Works
 
