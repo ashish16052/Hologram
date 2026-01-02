@@ -26,6 +26,156 @@
       --z-lift: 40px;       /* How much the image lifts forward */
     }
 
+    /* ==============================================
+       UPLOAD CONTROLS
+       ============================================== */
+    .upload-container {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .upload-btn {
+      position: relative;
+      padding: 12px 24px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+
+    .upload-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .upload-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Hidden file input */
+    .upload-btn input[type="file"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* Reset button */
+    .reset-btn {
+      padding: 12px 20px;
+      background: rgba(255, 100, 100, 0.15);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 100, 100, 0.3);
+      border-radius: 12px;
+      color: #ff9999;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(-10px);
+    }
+
+    .reset-btn.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+    }
+
+    .reset-btn:hover {
+      background: rgba(255, 100, 100, 0.25);
+      border-color: rgba(255, 100, 100, 0.5);
+    }
+
+    /* Upload status message */
+    .upload-status {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      background: rgba(100, 255, 150, 0.15);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(100, 255, 150, 0.3);
+      border-radius: 8px;
+      color: #90ffb0;
+      font-size: 13px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      z-index: 100;
+    }
+
+    .upload-status.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .upload-status.error {
+      background: rgba(255, 100, 100, 0.15);
+      border-color: rgba(255, 100, 100, 0.3);
+      color: #ff9999;
+    }
+
+    /* Drag and drop overlay */
+    .drop-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(100, 150, 255, 0.1);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 4px dashed rgba(100, 150, 255, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .drop-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .drop-overlay-text {
+      font-size: 24px;
+      color: #fff;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .drop-overlay-text span {
+      display: block;
+      font-size: 14px;
+      opacity: 0.7;
+      margin-top: 8px;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -352,6 +502,26 @@
   </style>
 </head>
 <body>
+  <!-- UPLOAD CONTROLS -->
+  <div class="upload-container">
+    <label class="upload-btn">
+      Upload Image
+      <input type="file" id="imageUpload" accept="image/*">
+    </label>
+    <button class="reset-btn" id="resetBtn">Reset</button>
+  </div>
+  
+  <!-- Status message -->
+  <div class="upload-status" id="uploadStatus"></div>
+  
+  <!-- Drag and drop overlay -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-overlay-text">
+      Drop image here
+      <span>Release to create holographic card</span>
+    </div>
+  </div>
+
   <!-- SCENE: Sets up 3D perspective context -->
   <div class="scene">
     <!-- CARD: The 3D-transformable container -->
@@ -402,6 +572,7 @@
      * 2. Smooth animation with lerp (linear interpolation)
      * 3. CSS variable updates for 3D transforms
      * 4. Touch support for mobile devices
+     * 5. File upload and drag-drop support
      */
 
     (function() {
@@ -416,7 +587,12 @@
         easing: 0.08,          // Lerp factor (0-1, lower = smoother)
         returnEasing: 0.05,    // Easing when returning to neutral
         scale: 1.02,           // Scale on hover
+        maxFileSize: 10 * 1024 * 1024, // 10MB max file size
+        allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
       };
+
+      // Default image URL (used for reset)
+      const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=640&q=80';
 
       // ==============================================
       // STATE
@@ -434,6 +610,8 @@
         // Interaction state
         isHovering: false,
         animationId: null,
+        // Upload state
+        hasCustomImage: false,
       };
 
       // ==============================================
@@ -441,6 +619,10 @@
       // ==============================================
       const card = document.getElementById('card');
       const cardImage = document.getElementById('cardImage');
+      const imageUpload = document.getElementById('imageUpload');
+      const resetBtn = document.getElementById('resetBtn');
+      const uploadStatus = document.getElementById('uploadStatus');
+      const dropOverlay = document.getElementById('dropOverlay');
 
       // ==============================================
       // UTILITY FUNCTIONS
@@ -480,6 +662,197 @@
        */
       function mapRange(value, inMin, inMax, outMin, outMax) {
         return ((value - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+      }
+
+      // ==============================================
+      // STATUS MESSAGE HELPERS
+      // ==============================================
+
+      /**
+       * Shows a status message
+       * @param {string} message - Message to display
+       * @param {boolean} isError - Whether this is an error message
+       * @param {number} duration - How long to show (ms)
+       */
+      function showStatus(message, isError = false, duration = 3000) {
+        uploadStatus.textContent = message;
+        uploadStatus.classList.remove('error');
+        if (isError) {
+          uploadStatus.classList.add('error');
+        }
+        uploadStatus.classList.add('visible');
+        
+        setTimeout(() => {
+          uploadStatus.classList.remove('visible');
+        }, duration);
+      }
+
+      // ==============================================
+      // FILE UPLOAD HANDLING
+      // ==============================================
+
+      /**
+       * Validates an image file
+       * @param {File} file - File to validate
+       * @returns {object} { valid: boolean, error?: string }
+       */
+      function validateFile(file) {
+        if (!file) {
+          return { valid: false, error: 'No file selected' };
+        }
+        
+        if (!CONFIG.allowedTypes.includes(file.type)) {
+          return { valid: false, error: 'Invalid file type. Please use JPG, PNG, GIF, WebP, or SVG.' };
+        }
+        
+        if (file.size > CONFIG.maxFileSize) {
+          const sizeMB = (CONFIG.maxFileSize / (1024 * 1024)).toFixed(0);
+          return { valid: false, error: `File too large. Maximum size is ${sizeMB}MB.` };
+        }
+        
+        return { valid: true };
+      }
+
+      /**
+       * Reads a file and converts it to a Data URL
+       * Stores temporarily in browser memory
+       * @param {File} file - Image file to read
+       */
+      function processImageFile(file) {
+        const validation = validateFile(file);
+        
+        if (!validation.valid) {
+          showStatus(validation.error, true);
+          return;
+        }
+        
+        // Show loading state
+        card.classList.add('loading');
+        
+        // Create FileReader to read file into memory as Data URL
+        const reader = new FileReader();
+        
+        reader.onload = function(event) {
+          // event.target.result contains the Data URL (base64 encoded image)
+          // This is stored in browser memory temporarily
+          const dataUrl = event.target.result;
+          
+          // Create a new image to verify it loads correctly
+          const testImage = new Image();
+          
+          testImage.onload = function() {
+            // Success - apply the image to the card
+            cardImage.src = dataUrl;
+            state.hasCustomImage = true;
+            resetBtn.classList.add('visible');
+            card.classList.remove('loading');
+            showStatus(`Image loaded: ${file.name}`);
+          };
+          
+          testImage.onerror = function() {
+            card.classList.remove('loading');
+            showStatus('Failed to load image. The file may be corrupted.', true);
+          };
+          
+          // Start loading the test image
+          testImage.src = dataUrl;
+        };
+        
+        reader.onerror = function() {
+          card.classList.remove('loading');
+          showStatus('Failed to read file.', true);
+        };
+        
+        // Read the file as a Data URL (base64)
+        // This stores the entire image in browser memory
+        reader.readAsDataURL(file);
+      }
+
+      /**
+       * Handles file input change event
+       * @param {Event} event - Change event
+       */
+      function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (file) {
+          processImageFile(file);
+        }
+        // Reset input so the same file can be selected again
+        event.target.value = '';
+      }
+
+      /**
+       * Resets to the default image
+       */
+      function handleReset() {
+        cardImage.src = DEFAULT_IMAGE;
+        state.hasCustomImage = false;
+        resetBtn.classList.remove('visible');
+        showStatus('Reset to default image');
+      }
+
+      // ==============================================
+      // DRAG AND DROP HANDLING
+      // ==============================================
+
+      let dragCounter = 0; // Track drag enter/leave for nested elements
+
+      /**
+       * Handles drag enter event
+       * @param {DragEvent} event
+       */
+      function handleDragEnter(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        dragCounter++;
+        
+        // Check if dragging files
+        if (event.dataTransfer.types.includes('Files')) {
+          dropOverlay.classList.add('visible');
+        }
+      }
+
+      /**
+       * Handles drag leave event
+       * @param {DragEvent} event
+       */
+      function handleDragLeave(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        dragCounter--;
+        
+        // Only hide overlay when fully leaving the window
+        if (dragCounter === 0) {
+          dropOverlay.classList.remove('visible');
+        }
+      }
+
+      /**
+       * Handles drag over event (required for drop to work)
+       * @param {DragEvent} event
+       */
+      function handleDragOver(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'copy';
+      }
+
+      /**
+       * Handles drop event
+       * @param {DragEvent} event
+       */
+      function handleDrop(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        dragCounter = 0;
+        dropOverlay.classList.remove('visible');
+        
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+          // Process only the first file
+          processImageFile(files[0]);
+        }
       }
 
       // ==============================================
@@ -677,19 +1050,28 @@
         
         if (prefersReducedMotion) {
           console.log('Reduced motion preference detected - animations disabled');
-          return;
+        } else {
+          // Mouse events for card
+          card.addEventListener('mouseenter', handleMouseEnter);
+          card.addEventListener('mousemove', handleMouseMove);
+          card.addEventListener('mouseleave', handleMouseLeave);
+          
+          // Touch events (mobile support)
+          card.addEventListener('touchstart', handleTouchStart, { passive: true });
+          card.addEventListener('touchmove', handleTouchMove, { passive: false });
+          card.addEventListener('touchend', handleTouchEnd);
+          card.addEventListener('touchcancel', handleTouchEnd);
         }
         
-        // Mouse events
-        card.addEventListener('mouseenter', handleMouseEnter);
-        card.addEventListener('mousemove', handleMouseMove);
-        card.addEventListener('mouseleave', handleMouseLeave);
+        // File upload events
+        imageUpload.addEventListener('change', handleFileSelect);
+        resetBtn.addEventListener('click', handleReset);
         
-        // Touch events (mobile support)
-        card.addEventListener('touchstart', handleTouchStart, { passive: true });
-        card.addEventListener('touchmove', handleTouchMove, { passive: false });
-        card.addEventListener('touchend', handleTouchEnd);
-        card.addEventListener('touchcancel', handleTouchEnd);
+        // Drag and drop events (on document for full window drop)
+        document.addEventListener('dragenter', handleDragEnter);
+        document.addEventListener('dragleave', handleDragLeave);
+        document.addEventListener('dragover', handleDragOver);
+        document.addEventListener('drop', handleDrop);
         
         // Setup image loading state
         setupImageLoading();
@@ -701,6 +1083,7 @@
         card.style.setProperty('--my', '0.5');
         
         console.log('Holographic 3D Card initialized');
+        console.log('Upload an image or drag & drop to create your own holographic card!');
       }
 
       // Start when DOM is ready
