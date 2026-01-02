@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holographic 3D Card</title>
+  <style>
+    /* ==============================================
+       ROOT VARIABLES & RESET
+       ============================================== */
+    :root {
+      /* 3D Transform values - updated by JavaScript */
+      --rx: 0deg;           /* X-axis rotation (vertical tilt) */
+      --ry: 0deg;           /* Y-axis rotation (horizontal tilt) */
+      --mx: 0.5;            /* Normalized mouse X (0-1) */
+      --my: 0.5;            /* Normalized mouse Y (0-1) */
+      
+      /* Card dimensions */
+      --card-width: 320px;
+      --card-height: 450px;
+      --card-radius: 16px;
+      
+      /* Effect intensities */
+      --max-tilt: 25deg;    /* Maximum rotation angle */
+      --perspective: 1200px; /* 3D perspective depth */
+      --z-lift: 40px;       /* How much the image lifts forward */
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* Dark gradient background to make card pop */
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ==============================================
+       SCENE CONTAINER
+       Sets up the 3D perspective context
+       ============================================== */
+    .scene {
+      /* Perspective creates the 3D viewing context
+         Lower values = more dramatic 3D effect
+         Higher values = subtler, more realistic */
+      perspective: var(--perspective);
+      perspective-origin: center center;
+    }
+
+    /* ==============================================
+       CARD CONTAINER
+       The main 3D-transformable element
+       ============================================== */
+    .card {
+      position: relative;
+      width: var(--card-width);
+      height: var(--card-height);
+      
+      /* CRITICAL: preserve-3d allows child elements 
+         to exist in 3D space relative to this container */
+      transform-style: preserve-3d;
+      
+      /* Apply rotation based on CSS variables
+         rotateX: tilts forward/backward (controlled by vertical mouse)
+         rotateY: tilts left/right (controlled by horizontal mouse) */
+      transform: rotateX(var(--rx)) rotateY(var(--ry));
+      
+      /* Smooth transitions for when mouse leaves */
+      transition: transform 0.1s ease-out;
+      
+      cursor: pointer;
+    }
+
+    /* Slower transition when returning to neutral on mouse leave */
+    .card.returning {
+      transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    /* ==============================================
+       CARD FACE
+       The visible front of the card with glassmorphism
+       ============================================== */
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: var(--card-radius);
+      
+      /* Glassmorphism effect */
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      
+      /* Translucent border for glass edge effect */
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      
+      /* Preserve 3D for child layers */
+      transform-style: preserve-3d;
+      
+      /* Overflow hidden clips all layers to border-radius */
+      overflow: hidden;
+      
+      /* Multi-layered shadow for depth and glow */
+      box-shadow: 
+        /* Inner highlight */
+        inset 0 1px 1px rgba(255, 255, 255, 0.1),
+        /* Soft ambient shadow */
+        0 10px 40px rgba(0, 0, 0, 0.4),
+        /* Colored glow that intensifies on hover */
+        0 0 80px rgba(120, 100, 255, calc(0.15 + var(--mx) * 0.1)),
+        0 0 120px rgba(255, 100, 200, calc(0.1 + var(--my) * 0.08));
+      
+      transition: box-shadow 0.3s ease;
+    }
+
+    /* ==============================================
+       IMAGE LAYER
+       The main card image with Z-depth offset
+       ============================================== */
+    .image-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      
+      /* translateZ pushes the image forward in 3D space
+         This creates parallax depth when the card tilts */
+      transform: translateZ(var(--z-lift));
+      
+      /* Preserve 3D so the Z translation works */
+      transform-style: preserve-3d;
+    }
+
+    .image-layer img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      
+      /* Smooth scaling on load */
+      transition: transform 0.3s ease;
+    }
+
+    /* ==============================================
+       SHINE LAYER
+       Holographic rainbow light refraction effect
+       ============================================== */
+    .shine-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      
+      /* Lift slightly above image for proper layering */
+      transform: translateZ(calc(var(--z-lift) + 1px));
+      
+      /* Animated holographic gradient
+         Position is controlled by mouse via CSS variables */
+      background: 
+        /* Primary rainbow sweep */
+        linear-gradient(
+          calc(120deg + var(--mx) * 60deg),
+          transparent 0%,
+          rgba(255, 0, 128, 0.15) 20%,
+          rgba(0, 255, 255, 0.2) 40%,
+          rgba(255, 255, 0, 0.15) 60%,
+          rgba(128, 0, 255, 0.2) 80%,
+          transparent 100%
+        ),
+        /* Secondary iridescent layer */
+        linear-gradient(
+          calc(240deg - var(--my) * 60deg),
+          transparent 0%,
+          rgba(0, 255, 128, 0.1) 30%,
+          rgba(255, 0, 255, 0.15) 70%,
+          transparent 100%
+        );
+      
+      /* Blend mode creates light interaction with image */
+      mix-blend-mode: color-dodge;
+      
+      /* Opacity responds to mouse position for dynamic feel */
+      opacity: calc(0.4 + var(--mx) * 0.3);
+      
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    /* ==============================================
+       SPECULAR HIGHLIGHT
+       Moving light spot that follows cursor
+       ============================================== */
+    .specular-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      transform: translateZ(calc(var(--z-lift) + 2px));
+      
+      /* Radial gradient positioned by mouse coordinates
+         Creates a bright "light source" spot */
+      background: radial-gradient(
+        ellipse 50% 50% at calc(var(--mx) * 100%) calc(var(--my) * 100%),
+        rgba(255, 255, 255, 0.35) 0%,
+        rgba(255, 255, 255, 0.1) 30%,
+        transparent 70%
+      );
+      
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+
+    /* ==============================================
+       GLOW LAYER
+       Soft bloom/glow around card edges
+       ============================================== */
+    .glow-layer {
+      position: absolute;
+      /* Extend beyond card boundaries for glow */
+      width: calc(100% + 40px);
+      height: calc(100% + 40px);
+      top: -20px;
+      left: -20px;
+      
+      /* Push behind the card face */
+      transform: translateZ(-20px);
+      
+      /* Multi-color animated glow */
+      background: 
+        radial-gradient(
+          ellipse at calc(30% + var(--mx) * 40%) calc(20% + var(--my) * 30%),
+          rgba(100, 200, 255, 0.4) 0%,
+          transparent 50%
+        ),
+        radial-gradient(
+          ellipse at calc(70% - var(--mx) * 40%) calc(80% - var(--my) * 30%),
+          rgba(255, 100, 200, 0.4) 0%,
+          transparent 50%
+        );
+      
+      filter: blur(20px);
+      opacity: 0.6;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Intensify glow on hover */
+    .card:hover .glow-layer {
+      opacity: 0.9;
+    }
+
+    /* ==============================================
+       NOISE TEXTURE OVERLAY (Bonus)
+       Adds subtle grain for realism
+       ============================================== */
+    .noise-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      transform: translateZ(calc(var(--z-lift) + 3px));
+      
+      /* SVG noise filter for subtle texture */
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      
+      opacity: 0.03;
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+
+    /* ==============================================
+       EDGE REFLECTION
+       Subtle highlight on card edges
+       ============================================== */
+    .card-face::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 50%;
+      
+      /* Top edge highlight */
+      background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.15) 0%,
+        transparent 100%
+      );
+      
+      border-radius: var(--card-radius) var(--card-radius) 0 0;
+      pointer-events: none;
+      transform: translateZ(1px);
+    }
+
+    /* ==============================================
+       PREFERS REDUCED MOTION (Accessibility)
+       Disables animations for users who prefer it
+       ============================================== */
+    @media (prefers-reduced-motion: reduce) {
+      .card {
+        transform: none !important;
+        transition: none !important;
+      }
+      
+      .shine-layer,
+      .specular-layer,
+      .glow-layer {
+        opacity: 0.3 !important;
+        background-position: center !important;
+      }
+    }
+
+    /* ==============================================
+       RESPONSIVE ADJUSTMENTS
+       ============================================== */
+    @media (max-width: 480px) {
+      :root {
+        --card-width: 280px;
+        --card-height: 400px;
+        --max-tilt: 15deg;
+      }
+    }
+
+    /* ==============================================
+       LOADING STATE
+       ============================================== */
+    .card.loading .image-layer {
+      background: linear-gradient(
+        90deg,
+        rgba(255,255,255,0.1) 0%,
+        rgba(255,255,255,0.2) 50%,
+        rgba(255,255,255,0.1) 100%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- SCENE: Sets up 3D perspective context -->
+  <div class="scene">
+    <!-- CARD: The 3D-transformable container -->
+    <div class="card" id="card">
+      <!-- CARD-FACE: Visible front with glassmorphism -->
+      <div class="card-face">
+        <!-- GLOW-LAYER: Soft bloom behind card -->
+        <div class="glow-layer"></div>
+        
+        <!-- IMAGE-LAYER: Main card artwork with Z-depth -->
+        <div class="image-layer">
+          <!-- 
+            ========================================
+            🖼️ REPLACE IMAGE HERE
+            ========================================
+            Change the src attribute to your image path.
+            Works with: local files, URLs, or data URIs
+            Recommended aspect ratio: ~3:4 (portrait)
+            ========================================
+          -->
+          <img 
+            src="https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=640&q=80" 
+            alt="Holographic Card Image"
+            id="cardImage"
+          >
+        </div>
+        
+        <!-- SHINE-LAYER: Holographic rainbow refraction -->
+        <div class="shine-layer"></div>
+        
+        <!-- SPECULAR-LAYER: Moving light highlight -->
+        <div class="specular-layer"></div>
+        
+        <!-- NOISE-LAYER: Subtle grain texture -->
+        <div class="noise-layer"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ==============================================
+     * HOLOGRAPHIC 3D CARD - Interactive Controller
+     * ==============================================
+     * 
+     * This script handles:
+     * 1. Mouse tracking relative to card center
+     * 2. Smooth animation with lerp (linear interpolation)
+     * 3. CSS variable updates for 3D transforms
+     * 4. Touch support for mobile devices
+     */
+
+    (function() {
+      'use strict';
+
+      // ==============================================
+      // CONFIGURATION
+      // ==============================================
+      const CONFIG = {
+        maxTilt: 25,           // Maximum rotation in degrees
+        perspective: 1200,      // CSS perspective value
+        easing: 0.08,          // Lerp factor (0-1, lower = smoother)
+        returnEasing: 0.05,    // Easing when returning to neutral
+        scale: 1.02,           // Scale on hover
+      };
+
+      // ==============================================
+      // STATE
+      // ==============================================
+      const state = {
+        // Target values (where we want to be)
+        targetX: 0,
+        targetY: 0,
+        // Current values (smoothly interpolated)
+        currentX: 0,
+        currentY: 0,
+        // Mouse position (0-1 normalized)
+        mouseX: 0.5,
+        mouseY: 0.5,
+        // Interaction state
+        isHovering: false,
+        animationId: null,
+      };
+
+      // ==============================================
+      // DOM REFERENCES
+      // ==============================================
+      const card = document.getElementById('card');
+      const cardImage = document.getElementById('cardImage');
+
+      // ==============================================
+      // UTILITY FUNCTIONS
+      // ==============================================
+
+      /**
+       * Linear interpolation (lerp)
+       * Smoothly transitions from current to target value
+       * @param {number} current - Current value
+       * @param {number} target - Target value  
+       * @param {number} factor - Easing factor (0-1)
+       * @returns {number} Interpolated value
+       */
+      function lerp(current, target, factor) {
+        return current + (target - current) * factor;
+      }
+
+      /**
+       * Clamps a value between min and max
+       * @param {number} value - Value to clamp
+       * @param {number} min - Minimum bound
+       * @param {number} max - Maximum bound
+       * @returns {number} Clamped value
+       */
+      function clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
+      }
+
+      /**
+       * Maps a value from one range to another
+       * @param {number} value - Input value
+       * @param {number} inMin - Input range minimum
+       * @param {number} inMax - Input range maximum
+       * @param {number} outMin - Output range minimum
+       * @param {number} outMax - Output range maximum
+       * @returns {number} Mapped value
+       */
+      function mapRange(value, inMin, inMax, outMin, outMax) {
+        return ((value - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
+      }
+
+      // ==============================================
+      // MOUSE POSITION CALCULATION
+      // ==============================================
+
+      /**
+       * Calculates normalized mouse position relative to card center
+       * @param {MouseEvent|Touch} event - Mouse or touch event
+       */
+      function calculateMousePosition(event) {
+        const rect = card.getBoundingClientRect();
+        
+        // Get mouse/touch coordinates
+        const clientX = event.clientX || event.touches?.[0]?.clientX || 0;
+        const clientY = event.clientY || event.touches?.[0]?.clientY || 0;
+        
+        // Calculate position relative to card (0 to 1)
+        // 0 = left/top edge, 1 = right/bottom edge
+        const x = (clientX - rect.left) / rect.width;
+        const y = (clientY - rect.top) / rect.height;
+        
+        // Store normalized values (clamped to 0-1)
+        state.mouseX = clamp(x, 0, 1);
+        state.mouseY = clamp(y, 0, 1);
+        
+        // Calculate rotation targets
+        // Map from 0-1 to -maxTilt to +maxTilt
+        // Note: Y rotation uses X position (left-right tilt)
+        // Note: X rotation uses Y position (up-down tilt) and is INVERTED
+        //       so moving mouse up tilts card toward you (natural feel)
+        state.targetY = mapRange(state.mouseX, 0, 1, -CONFIG.maxTilt, CONFIG.maxTilt);
+        state.targetX = mapRange(state.mouseY, 0, 1, CONFIG.maxTilt, -CONFIG.maxTilt);
+      }
+
+      // ==============================================
+      // ANIMATION LOOP
+      // ==============================================
+
+      /**
+       * Main animation loop using requestAnimationFrame
+       * Smoothly interpolates current values toward targets
+       */
+      function animate() {
+        // Determine easing based on hover state
+        const easing = state.isHovering ? CONFIG.easing : CONFIG.returnEasing;
+        
+        // Smoothly interpolate rotation values
+        state.currentX = lerp(state.currentX, state.targetX, easing);
+        state.currentY = lerp(state.currentY, state.targetY, easing);
+        
+        // Apply transforms via CSS custom properties
+        // This is more performant than direct style manipulation
+        // as it leverages CSS's optimization for custom properties
+        card.style.setProperty('--rx', `${state.currentX}deg`);
+        card.style.setProperty('--ry', `${state.currentY}deg`);
+        card.style.setProperty('--mx', state.mouseX);
+        card.style.setProperty('--my', state.mouseY);
+        
+        // Check if we need to continue animating
+        // Stop when values are very close to targets (optimization)
+        const deltaX = Math.abs(state.currentX - state.targetX);
+        const deltaY = Math.abs(state.currentY - state.targetY);
+        
+        if (deltaX > 0.01 || deltaY > 0.01 || state.isHovering) {
+          // Continue animation
+          state.animationId = requestAnimationFrame(animate);
+        } else {
+          // Snap to final values and stop
+          state.currentX = state.targetX;
+          state.currentY = state.targetY;
+          state.animationId = null;
+        }
+      }
+
+      /**
+       * Starts the animation loop if not already running
+       */
+      function startAnimation() {
+        if (!state.animationId) {
+          state.animationId = requestAnimationFrame(animate);
+        }
+      }
+
+      // ==============================================
+      // EVENT HANDLERS
+      // ==============================================
+
+      /**
+       * Mouse enter handler
+       */
+      function handleMouseEnter() {
+        state.isHovering = true;
+        card.classList.remove('returning');
+        startAnimation();
+      }
+
+      /**
+       * Mouse move handler
+       * @param {MouseEvent} event
+       */
+      function handleMouseMove(event) {
+        if (!state.isHovering) return;
+        calculateMousePosition(event);
+        startAnimation();
+      }
+
+      /**
+       * Mouse leave handler
+       * Resets card to neutral position
+       */
+      function handleMouseLeave() {
+        state.isHovering = false;
+        
+        // Reset targets to neutral
+        state.targetX = 0;
+        state.targetY = 0;
+        state.mouseX = 0.5;
+        state.mouseY = 0.5;
+        
+        // Add returning class for slower transition
+        card.classList.add('returning');
+        
+        startAnimation();
+      }
+
+      // ==============================================
+      // TOUCH SUPPORT (Bonus)
+      // ==============================================
+
+      /**
+       * Touch start handler
+       * @param {TouchEvent} event
+       */
+      function handleTouchStart(event) {
+        state.isHovering = true;
+        card.classList.remove('returning');
+        calculateMousePosition(event.touches[0]);
+        startAnimation();
+      }
+
+      /**
+       * Touch move handler
+       * @param {TouchEvent} event
+       */
+      function handleTouchMove(event) {
+        event.preventDefault(); // Prevent scrolling while interacting
+        calculateMousePosition(event.touches[0]);
+        startAnimation();
+      }
+
+      /**
+       * Touch end handler
+       */
+      function handleTouchEnd() {
+        handleMouseLeave();
+      }
+
+      // ==============================================
+      // IMAGE LOADING
+      // ==============================================
+
+      /**
+       * Handle image load state
+       */
+      function setupImageLoading() {
+        card.classList.add('loading');
+        
+        if (cardImage.complete) {
+          card.classList.remove('loading');
+        } else {
+          cardImage.addEventListener('load', () => {
+            card.classList.remove('loading');
+          });
+          
+          cardImage.addEventListener('error', () => {
+            console.warn('Failed to load card image');
+            card.classList.remove('loading');
+          });
+        }
+      }
+
+      // ==============================================
+      // INITIALIZATION
+      // ==============================================
+
+      /**
+       * Initialize all event listeners and setup
+       */
+      function init() {
+        // Check for reduced motion preference
+        const prefersReducedMotion = window.matchMedia(
+          '(prefers-reduced-motion: reduce)'
+        ).matches;
+        
+        if (prefersReducedMotion) {
+          console.log('Reduced motion preference detected - animations disabled');
+          return;
+        }
+        
+        // Mouse events
+        card.addEventListener('mouseenter', handleMouseEnter);
+        card.addEventListener('mousemove', handleMouseMove);
+        card.addEventListener('mouseleave', handleMouseLeave);
+        
+        // Touch events (mobile support)
+        card.addEventListener('touchstart', handleTouchStart, { passive: true });
+        card.addEventListener('touchmove', handleTouchMove, { passive: false });
+        card.addEventListener('touchend', handleTouchEnd);
+        card.addEventListener('touchcancel', handleTouchEnd);
+        
+        // Setup image loading state
+        setupImageLoading();
+        
+        // Initial CSS variable setup
+        card.style.setProperty('--rx', '0deg');
+        card.style.setProperty('--ry', '0deg');
+        card.style.setProperty('--mx', '0.5');
+        card.style.setProperty('--my', '0.5');
+        
+        console.log('Holographic 3D Card initialized');
+      }
+
+      // Start when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>
